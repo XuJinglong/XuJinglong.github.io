@@ -6,16 +6,19 @@
   <meta name="renderer" content="webkit">
   <meta http-equiv="X-UA-Compatible" content="IE=edge" >
   <link rel="dns-prefetch" href="http://yoursite.com">
-  <title>md | Hexo</title>
+  <title>UE4多线程简介 | Hexo</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-  <meta property="og:type" content="article">
-<meta property="og:title" content="md">
+  <meta name="description" content="UE4现有三种方式使用多线程">
+<meta property="og:type" content="article">
+<meta property="og:title" content="UE4多线程简介">
 <meta property="og:url" content="http://yoursite.com/2020/05/25/UE4%E5%A4%9A%E7%BA%BF%E7%A8%8B%E7%AE%80%E4%BB%8B/index.html">
 <meta property="og:site_name" content="Hexo">
+<meta property="og:description" content="UE4现有三种方式使用多线程">
 <meta property="og:locale" content="en_US">
 <meta property="article:published_time" content="2020-05-25T12:58:50.000Z">
-<meta property="article:modified_time" content="2020-05-25T12:58:50.292Z">
+<meta property="article:modified_time" content="2020-05-25T13:04:32.468Z">
 <meta property="article:author" content="XuJinglong">
+<meta property="article:tag" content="UE4 多线程">
 <meta name="twitter:card" content="summary">
   
     <link rel="alternative" href="/atom.xml" title="Hexo" type="application/atom+xml">
@@ -159,7 +162,7 @@
         
   
     <h1 class="article-title" itemprop="name">
-      md
+      UE4多线程简介
     </h1>
   
 
@@ -172,7 +175,43 @@
     
     <div class="article-entry" itemprop="articleBody">
       
-        
+        <p>UE4现有三种方式使用多线程  </p>
+<a id="more"></a>
+
+<h4 id="一-基本多线程"><a href="#一-基本多线程" class="headerlink" title="一. 基本多线程"></a>一. 基本多线程</h4><p>FRunnable：线程执行体，实现Init，Run，Stop，Exit等函数<br>FRunnableThread：实际的线程，不同平台有不同子类  </p>
+<p>使用方法：  </p>
+<ol>
+<li>创建类继承自FRunnable，实现在线程中执行的逻辑</li>
+<li>调用FRunnableThread::Create，传入FRunnable，创建出实际的线程</li>
+<li>Runable中的函数自动执行或者手动触发？？？  </li>
+</ol>
+<h4 id="二-AsycTask"><a href="#二-AsycTask" class="headerlink" title="二. AsycTask"></a>二. AsycTask</h4><p>使用线程池来执行异步任务  </p>
+<p>FQueuedThreadPool：FEngineLoop的PreInit的时候创建GThreadPool，实际是子类FQueuedThreadPoolBase，包含IQueuedWork和FQueuedThread的数组。  </p>
+<p>FQueuedThread：线程执行体，继承自FRunnable，多了FEvent的成员。线程池create的时候创建相应FQueuedThread，并创建实际线程。之后线程Run,循环等待DoWorkEvent触发，执行IQueuedWork中task的逻辑。  </p>
+<p>IQueuedWork：FAsyncTask和FAutoDeleteAsyncTask的接口父类  </p>
+<p>过程：</p>
+<ol>
+<li>创建task类，实现必要的函数，比如DoWork和Abandon等  </li>
+<li>创建模板类FAsyncTask  </li>
+<li>启动任务，这个过程QueuedPool-&gt;AddQueuedWork(this)，从线程池中找到一个线程，传入IQueuedWork，触发DoWorkEvent。  </li>
+<li>结束任务  </li>
+</ol>
+<p>e.g  </p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">//AsyncWork.h</span></span><br><span class="line">        <span class="class"><span class="keyword">class</span> <span class="title">ExampleAsyncTask</span> :</span> <span class="keyword">public</span> FNonAbandonableTask</span><br><span class="line">	&#123;</span><br><span class="line">		<span class="keyword">friend</span> <span class="class"><span class="keyword">class</span> <span class="title">FAsyncTask</span>&lt;ExampleAsyncTask&gt;;</span></span><br><span class="line"></span><br><span class="line">		int32 ExampleData;</span><br><span class="line"></span><br><span class="line">		ExampleAsyncTask(int32 InExampleData)</span><br><span class="line">		 : ExampleData(InExampleData)</span><br><span class="line">		&#123;</span><br><span class="line">		&#125;</span><br><span class="line"></span><br><span class="line">		<span class="function"><span class="keyword">void</span> <span class="title">DoWork</span><span class="params">()</span></span></span><br><span class="line"><span class="function">		</span>&#123;</span><br><span class="line">			... <span class="keyword">do</span> the work here</span><br><span class="line">		&#125;</span><br><span class="line"></span><br><span class="line">		<span class="function">FORCEINLINE TStatId <span class="title">GetStatId</span><span class="params">()</span> <span class="keyword">const</span></span></span><br><span class="line"><span class="function">		</span>&#123;</span><br><span class="line">			RETURN_QUICK_DECLARE_CYCLE_STAT(ExampleAsyncTask, STATGROUP_ThreadPoolAsyncTasks);</span><br><span class="line">		&#125;</span><br><span class="line">	&#125;;</span><br><span class="line"></span><br><span class="line">	<span class="function"><span class="keyword">void</span> <span class="title">Example</span><span class="params">()</span></span></span><br><span class="line"><span class="function">	</span>&#123;</span><br><span class="line"></span><br><span class="line">		<span class="comment">//start an example job</span></span><br><span class="line"></span><br><span class="line">		FAsyncTask&lt;ExampleAsyncTask&gt;* MyTask = <span class="keyword">new</span> FAsyncTask&lt;ExampleAsyncTask&gt;( <span class="number">5</span> );</span><br><span class="line">		MyTask-&gt;StartBackgroundTask();</span><br><span class="line"></span><br><span class="line">		<span class="comment">//--or --</span></span><br><span class="line"></span><br><span class="line">		MyTask-&gt;StartSynchronousTask();</span><br><span class="line"></span><br><span class="line">		<span class="comment">//to just do it now on this thread</span></span><br><span class="line">		<span class="comment">//Check if the task is done :</span></span><br><span class="line"></span><br><span class="line">		<span class="keyword">if</span> (MyTask-&gt;IsDone())</span><br><span class="line">		&#123;</span><br><span class="line">		&#125;</span><br><span class="line"></span><br><span class="line">		<span class="comment">//Spinning on IsDone is not acceptable( see EnsureCompletion ), but it is ok to check once a frame.</span></span><br><span class="line">		<span class="comment">//Ensure the task is done, doing the task on the current thread if it has not been started, waiting until completion in all cases.</span></span><br><span class="line"></span><br><span class="line">		MyTask-&gt;EnsureCompletion();</span><br><span class="line">		<span class="keyword">delete</span> <span class="built_in">Task</span>;</span><br><span class="line">	&#125;</span><br></pre></td></tr></table></figure>
+
+<h4 id="三-TaskGraph"><a href="#三-TaskGraph" class="headerlink" title="三. TaskGraph"></a>三. TaskGraph</h4><p>可在主线程执行，tick系统使用TaskGraph，FTickFunctionTask任务。一样在引擎初始化时预先创建一些线程，再创建task交给不同线程执行。  </p>
+<p>5个命名线程和若干any线程。  </p>
+<p>渲染线程的渲染命令FRenderCommand就是一个task，ENQUEUE_RENDER_COMMAND来入队  </p>
+<p>FTaskGraphInterface  </p>
+<p>e.g  </p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">FGraphEventRef Join = TGraphTask&lt;FGenericTask&gt;::CreateTask().ConstructAndDispatchWhenReady(...);</span><br><span class="line">FTaskGraphInterface::Get().WaitUntilTaskCompletes(Join, ENamedThreads::GameThread_Local);</span><br></pre></td></tr></table></figure>
+
+<h4 id="多线程补充"><a href="#多线程补充" class="headerlink" title="多线程补充"></a>多线程补充</h4><p>锁<br>FScopeLock：一个范围锁，对一个FCriticalSection使用，再作用域范围内对关键区代码加锁解锁。使用方法FScope ScopeLock(CriticalSection)  </p>
+<p>FCriticalSection：真正的加锁，通过Lock和UnLock函数。实际是一个互持锁，有不同平台的实现。</p>
+<h4 id="四-总结"><a href="#四-总结" class="headerlink" title="四. 总结"></a>四. 总结</h4><p>简单任务和有顺序依赖的任务给TaskGraph处理，复杂任务使用AsycTask或者FRunnable  </p>
+<hr>
+<p><strong>参考</strong><br><a href="https://zhuanlan.zhihu.com/p/38881269" target="_blank" rel="noopener">ue4多线程</a><br><a href="https://zhuanlan.zhihu.com/p/91062516" target="_blank" rel="noopener">c++线程锁</a><br><a href="https://zhuanlan.zhihu.com/p/87682798" target="_blank" rel="noopener">多线程锁机制</a><br><a href="https://zhuanlan.zhihu.com/p/73381385" target="_blank" rel="noopener">渲染和TaskGraph</a><br><a href="https://blog.csdn.net/u010385624/article/details/99634788" target="_blank" rel="noopener">ue4多线程补充</a></p>
+
       
 
       
@@ -201,6 +240,17 @@
     <div class="article-info article-info-index">
       
       
+	<div class="article-tag tagcloud">
+		<i class="icon-price-tags icon"></i>
+		<ul class="article-tag-list">
+			 
+        		<li class="article-tag-list-item">
+        			<a href="javascript:void(0)" class="js-tag article-tag-list-link color3">UE4 多线程</a>
+        		</li>
+      		
+		</ul>
+	</div>
+
       
 
       
@@ -391,6 +441,10 @@ return o(i(t),arguments.length<2?void 0:u(arguments[1]))}})},function(t,n,r){var
             <input type="checkbox" q-on="click:toggleTag(e)" q-attr="checked:showTags">
           </label>
           <ul class="article-tag-list" q-show="showTags">
+             
+              <li class="article-tag-list-item">
+                <a href="javascript:void(0)" class="js-tag color3">UE4 多线程</a>
+              </li>
             
             <div class="clearfix"></div>
           </ul>
